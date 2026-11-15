@@ -125,7 +125,7 @@ func _process(delta : float) -> void:
 	_accumulator += delta;
 	if _accumulator >= _displacement_update_rate:
 		_accumulator -= _displacement_update_rate
-		_img = wave_generator.retrieve_displacement_map(0, _img)
+		_request_cpu_displacement_texture(0)
 
 func _setup_wave_generator() -> void:
 	if parameters.size() <= 0: return
@@ -194,3 +194,22 @@ func _sample_displacement(cascade: int, uv: Vector2) -> Vector3:
 	var col := col_x0.lerp(col_x1, fy)
 	
 	return Vector3(col.r, col.g, col.b)
+
+# Godot 4.4+ reads the displacement map back asynchronously:
+# texture_get_data_async() delivers the bytes in a callback during frame sync,
+# so the main thread never waits on the GPU. Engines that only have the blocking
+# call use it directly instead.
+func _request_cpu_displacement_texture(cascade_index:int) -> void:
+	if wave_generator == null: return
+	var device := RenderingServer.get_rendering_device()
+	if device.has_method(&'texture_get_data_async'):
+		device.texture_get_data_async(wave_generator.get_displacement_map_rid(cascade_index), 0, _store_cpu_displacement_texture.bind(cascade_index))
+	else:
+		_store_cpu_displacement_texture(device.texture_get_data(wave_generator.get_displacement_map_rid(cascade_index), 0), cascade_index)
+
+func _store_cpu_displacement_texture(data:PackedByteArray, cascade_index:int) -> void:
+	if wave_generator == null: return
+	_img = wave_generator.get_displacement_map_image_from_data(cascade_index, data, _img)
+	_img.convert(Image.FORMAT_RGBAF) # Convert to workable format
+	_img_height = _img.get_height()
+	_img_width = _img.get_width()

@@ -75,8 +75,13 @@ func get_displacement_map_rid(cascade:int) -> RID:
 # Accepts a preallocated image param to avoid needlessly creating new
 # image objects on the heap
 func get_displacement_map_image(cascade:int = 0, img:Image = null) -> Image:
-	var tex_rid := get_displacement_map_rid(cascade)
-	var data := context.device.texture_get_data(tex_rid, 0)
+	return get_displacement_map_image_from_data(cascade, context.device.texture_get_data(get_displacement_map_rid(cascade), 0), img)
+
+## Builds the displacement map image for a cascade from already-readback
+# texture data (as delivered by texture_get_data_async(), for example).
+# Accepts a preallocated image param to avoid needlessly creating new
+# image objects on the heap
+func get_displacement_map_image_from_data(cascade:int, data:PackedByteArray, img:Image = null) -> Image:
 	# For 2D array textures, need to slice the correct layer
 	var bytes_per_pixel = 8 # RGBA16F (4 channels × 2 bytes)
 	var layer_size = map_size * map_size * bytes_per_pixel
